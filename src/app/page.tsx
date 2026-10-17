@@ -5,10 +5,10 @@ import { useMemo, useState } from "react";
 type Tab = "firewall" | "memory" | "tournament" | "api";
 
 const drafts = [
-  { title: "The quiet launch", note: "Product note", text: "Meet the new Field Notes planner — a calmer place for the ideas that arrive between everything else. Made with recycled paper, a soft cover, and enough room to let a thought finish itself." },
-  { title: "A better default", note: "Manifesto", text: "We believe good tools should feel like good rooms: considered, useful, and easy to return to. Field Notes gives your thinking a little more room, with less noise and no performative productivity." },
-  { title: "Three materials", note: "Behind the scenes", text: "Paper, thread, and patience. Every Field Notes planner is assembled in small batches from materials chosen to age well, because the objects we use every day deserve a longer point of view." },
-  { title: "The Sunday list", note: "Social caption", text: "A small list for a slower Sunday: put the phone down, open a fresh page, make something warm, and write down one thing you want to remember from this week." }
+  { title: "Bad AI Slop Post", note: "Synthetic copy", text: "In today's fast-paced world, we are excited to unlock a transformative game-changer. Let's delve into this robust journey and unleash the power of synergy!" },
+  { title: "Manufactured Hype Post", note: "Claim check", text: "Our revolutionary platform is 100% guaranteed to make every business 10x better. Thousands of customers love the number one solution." },
+  { title: "Authentic Founder Story", note: "Human voice", text: "The first version failed because we asked people to change their habits before we earned their trust. We rebuilt the small part that mattered: a tool that gets out of the way." },
+  { title: "Long Essay to Threads", note: "Sequence preview", text: "The best systems are not the loudest ones. They are the habits that make a difficult day a little easier, the quiet defaults that help a team keep its promises, and the small decisions that compound into trust. This is why we built BrandGate as a layer between an agent's draft and the publish button. It gives teams a place to remember what good sounds like before the work reaches the world." }
 ];
 
 const slopPhrases = ["Meet the", "calmer place", "a little more room", "deserve a longer point of view", "small list"];
