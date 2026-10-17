@@ -58,7 +58,9 @@ cp .env.example .env.local
 | --- | --- | --- |
 | `PORT` | `3000` | Next.js HTTP port |
 | `JEV_API_KEY` | empty | Optional remote JEV evaluation; local evaluation is used when empty |
+| `JEV_API_URL` | `https://api.jev.ai/v1/evaluate` | Optional JEV endpoint override |
 | `WEBHOOK_URL` | empty | Optional callback destination for evaluation notifications |
+| `POSTROOM_WEBHOOK_URL` | empty | Optional publishing queue destination; browser settings can override it per request |
 
 Do not commit API keys or other secrets. `.env.example` contains names and safe empty
 values only.
@@ -115,6 +117,12 @@ The Live Firewall tab can download the latest receipt as JSON or copy a Markdown
 compliance badge. The Agent API tab includes a one-click queue simulator that runs
 the full agent path: blocked slop, deterministic rewrite, 0.82 threshold approval,
 and a signed payload delivered to the simulated YET Postroom destination.
+
+The header settings modal stores optional browser-only values for `JEV_API_KEY`,
+`JEV_API_URL`, and `POSTROOM_WEBHOOK_URL` in localStorage. When present, the Web
+Studio sends them as `x-brandgate-jev-api-key`, `x-brandgate-jev-api-url`, and
+`x-brandgate-postroom-webhook-url` request headers; server environment variables remain
+the default for REST, MCP, and Docker clients.
 
 ## Docker
 

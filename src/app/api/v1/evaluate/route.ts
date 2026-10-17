@@ -23,7 +23,10 @@ export async function POST(request: Request) {
     const receipt = createBrandReceipt(text, channel, profile.id, { latency_badge: latencyBadge, decisions_evaluated: decisionsEvaluated });
     const routed = routeContent(text, channel);
     const channelRouting = routeDetails(text, channel, body.media_count ?? 0);
-    const provider = await evaluateWithJEV(text, profile);
+    const provider = await evaluateWithJEV(text, profile, {
+      apiKey: request.headers.get("x-brandgate-jev-api-key") ?? undefined,
+      apiUrl: request.headers.get("x-brandgate-jev-api-url") ?? undefined
+    });
     const slopSpans = rules.spans.filter((span) => span.category === "ai-slop");
     const slopScore = Math.min(100, slopSpans.reduce((sum, span) => sum + (span.severity === "high" ? 18 : 12), 0) + Math.min(30, Math.max(0, (text.match(/—/g) ?? []).length - 1) * 5));
     const hookScore = Math.round((hook.total / 40) * 100);
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
     const evaluation: Evaluation = { id: `eval_${randomUUID()}`, brandId: profile.id, status: "completed", score: provider.score, results: [{ criterionId: "rules", score: rules.score, feedback: rules.pass ? "Passes hard rules" : "Contains hard-rule violations" }, { criterionId: "hook", score: hook.total, feedback: hook.reasons.join("; ") }], createdAt: now, completedAt: now };
     saveEvaluation(evaluation);
     const result = { evaluation, brand: brandFromProfile(profile), provider, rules, hook, routed, receipt, pass: verdict === "APPROVED", verdict, overall_score: Number(overallScore.toFixed(3)), slop_score: slopScore, hook_score: hookScore, rule_results: ruleResults, channel_routing: channelRouting, receipt_hash: receipt.hash, latency_badge: latencyBadge, highlighted_spans: slopSpans };
-    const webhook = await deliverWebhook("evaluation.completed", result);
+    const webhook = await deliverWebhook("evaluation.completed", result, request.headers.get("x-brandgate-postroom-webhook-url") ?? undefined);
     return NextResponse.json({ ...result, webhook }, { status: 200 });
   } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
 }

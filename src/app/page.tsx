@@ -13,6 +13,29 @@ type Receipt = {
   receipt: { id: string; hash: string; algorithm: string; createdAt: string; profileId?: string };
 };
 type SimulationStep = { label: string; status: "pending" | "active" | "done" | "blocked"; detail: string };
+type RuntimeSettings = { jevApiKey: string; jevApiUrl: string; postroomWebhookUrl: string };
+
+const SETTINGS_KEY = "brandgate.engine.settings";
+
+function readRuntimeSettings(): RuntimeSettings {
+  if (typeof window === "undefined") return { jevApiKey: "", jevApiUrl: "", postroomWebhookUrl: "" };
+  try {
+    return { jevApiKey: "", jevApiUrl: "", postroomWebhookUrl: "", ...JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? "{}") };
+  } catch {
+    return { jevApiKey: "", jevApiUrl: "", postroomWebhookUrl: "" };
+  }
+}
+
+function runtimeHeaders(extra: Record<string, string> = {}) {
+  const settings = readRuntimeSettings();
+  return {
+    "Content-Type": "application/json",
+    ...(settings.jevApiKey ? { "x-brandgate-jev-api-key": settings.jevApiKey } : {}),
+    ...(settings.jevApiUrl ? { "x-brandgate-jev-api-url": settings.jevApiUrl } : {}),
+    ...(settings.postroomWebhookUrl ? { "x-brandgate-postroom-webhook-url": settings.postroomWebhookUrl } : {}),
+    ...extra
+  };
+}
 
 const drafts = [
   { title: "Bad AI Slop Post", note: "Synthetic copy", text: "In today's fast-paced world, let's unlock a robust workflow. Let's delve into this game-changer and unleash the power of synergy!" },
@@ -48,6 +71,35 @@ function StatusPill({ children, tone = "good" }: { children: React.ReactNode; to
 
 function Modal({ title, eyebrow, children, onClose }: { title: string; eyebrow: string; children: React.ReactNode; onClose: () => void }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-topline"><span className="eyebrow">{eyebrow}</span><button className="modal-close" onClick={onClose} aria-label="Close dialog">×</button></div><h2 id="modal-title">{title}</h2>{children}</section></div>;
+}
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const [settings, setSettings] = useState<RuntimeSettings>(() => readRuntimeSettings());
+  const [saved, setSaved] = useState(false);
+  const hybrid = Boolean(settings.jevApiKey.trim());
+  const update = (field: keyof RuntimeSettings, value: string) => setSettings((current) => ({ ...current, [field]: value }));
+  const save = () => {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  };
+  const clear = () => {
+    const empty = { jevApiKey: "", jevApiUrl: "", postroomWebhookUrl: "" };
+    window.localStorage.removeItem(SETTINGS_KEY);
+    setSettings(empty);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1800);
+  };
+  return <Modal eyebrow="Runtime controls" title="⚙️ Engine &amp; Token Settings" onClose={onClose}><div className={`mode-banner ${hybrid ? "hybrid" : "local"}`}><div><span className="small-caps">Active evaluation mode</span><strong>{hybrid ? "TypeSafe Jev Hybrid Mode" : "Local Deterministic Engine (Active · 0 Tokens Required)"}</strong></div><StatusPill tone={hybrid ? "warn" : "good"}>{hybrid ? "JEV + fallback" : "Local"}</StatusPill></div><p className="modal-copy">Values entered here stay in this browser&apos;s localStorage. They are sent as request headers only when you run an evaluation or delivery. Server environment variables remain the default for headless REST and Docker use.</p><label className="settings-field"><span>JEV_API_KEY <em>optional</em></span><input className="input" type="password" value={settings.jevApiKey} onChange={(event) => update("jevApiKey", event.target.value)} placeholder="Paste a JEV key to enable hybrid mode" autoComplete="off" /></label><label className="settings-field"><span>JEV_API_URL <em>optional</em></span><input className="input" value={settings.jevApiUrl} onChange={(event) => update("jevApiUrl", event.target.value)} placeholder="https://api.jev.ai/v1/evaluate" /></label><label className="settings-field"><span>POSTROOM_WEBHOOK_URL <em>optional</em></span><input className="input" value={settings.postroomWebhookUrl} onChange={(event) => update("postroomWebhookUrl", event.target.value)} placeholder="https://your-postroom.example/hooks/brandgate" /></label><div className="modal-actions"><button className="secondary-btn" onClick={clear}>Clear browser settings</button><button className="primary-btn" onClick={save}>{saved ? "Saved locally" : "Save settings"}</button></div></Modal>;
+}
+
+function QuickstartModal({ onClose }: { onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const command = "curl -sS -X POST http://localhost:3000/api/mcp -H 'Content-Type: application/json' -d '{\"method\":\"tools/list\"}'";
+  const copyCommand = async () => {
+    try { await copyText(command); setCopied(true); window.setTimeout(() => setCopied(false), 1800); } catch { setCopied(false); }
+  };
+  return <Modal eyebrow="Three ways in" title="📖 Quickstart &amp; How It Works" onClose={onClose}><div className="quickstart-grid"><article className="quickstart-card"><span className="quickstart-number">01</span><h3>Web Studio</h3><p>Paste a draft, check 38 decisions, and receive a signed SHA-256 Brand Receipt before anything ships.</p><span className="quickstart-flow">Paste draft <b>→</b> Check rules <b>→</b> Receipt</span></article><article className="quickstart-card"><span className="quickstart-number">02</span><h3>MCP for agents</h3><p>Connect OpenClaw, Hermes, or Claude to the BrandGate MCP endpoint and let the firewall sit between writing and publishing.</p><div className="quickstart-code"><code>POST /api/mcp</code><button className="copy-chip" onClick={copyCommand}>{copied ? "Copied" : "Copy command"}</button></div></article><article className="quickstart-card"><span className="quickstart-number">03</span><h3>Docker / REST</h3><p>Run the self-hosted firewall locally with no cloud database and no token requirement for deterministic mode.</p><code className="quickstart-shell">docker build -t brandgate .<br />docker run -p 3000:3000 brandgate</code></article></div><p className="copy-feedback">{copied ? "MCP tools/list command copied to clipboard." : "Local mode is ready immediately; hybrid JEV mode is optional."}</p></Modal>;
 }
 
 function highlightSlop(text: string) {
@@ -95,7 +147,7 @@ function FirewallWorkbench() {
     setEvaluating(true);
     const targetChannel = channel.toLowerCase() === "linkedin" ? "linkedin" : channel.toLowerCase() === "instagram" ? "instagram" : "generic";
     try {
-      const response = await fetch("/api/v1/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft, target_channel: targetChannel }) });
+      const response = await fetch("/api/v1/evaluate", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ draft, target_channel: targetChannel }) });
       const result = await response.json() as Receipt;
       if (!response.ok) throw new Error("Evaluation endpoint returned an error");
       setReceipt(result);
@@ -130,7 +182,7 @@ function MemoryStudio() {
   const extract = async () => {
     setExtracting(true);
     try {
-      const response = await fetch("/api/v1/brand/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ posts: posts.split("\n").filter(Boolean) }) });
+      const response = await fetch("/api/v1/brand/extract", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ posts: posts.split("\n").filter(Boolean) }) });
       const body = await response.json() as { brand_memory?: { voice_traits?: string[] } };
       if (response.ok && body.brand_memory?.voice_traits) setMemory(body.brand_memory.voice_traits);
     } finally { setExtracting(false); }
@@ -146,7 +198,7 @@ function Tournament() {
   const runTournament = async () => {
     setRunning(true);
     try {
-      const response = await fetch("/api/v1/tournament", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidates: variants }) });
+      const response = await fetch("/api/v1/tournament", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ candidates: variants }) });
       const body = await response.json() as { ranking?: Array<{ index: number; score: { total: number } }> };
       if (response.ok && body.ranking) setScores(body.ranking.reduce((next, item) => { next[item.index] = Math.round(item.score.total / 40 * 100); return next; }, [0, 0, 0]));
     } finally { setRunning(false); }
@@ -167,23 +219,23 @@ function QueueSimulator() {
     const agentDraft = "In today's fast-paced world, let's unlock a robust workflow. Let's delve into this game-changer. What did a failed launch teach us? We rebuilt the small workflow that helped a team keep its promise.";
     try {
       setStep(0, "active", "Submitting the agent's first draft to the firewall");
-      const blockedResponse = await fetch("/api/v1/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: agentDraft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }) });
+      const blockedResponse = await fetch("/api/v1/evaluate", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ draft: agentDraft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }) });
       const blocked = await blockedResponse.json() as Receipt;
       if (!blockedResponse.ok) throw new Error("Initial evaluation failed");
       setStep(0, "done", `Received ${blocked.verdict} with ${blocked.slop_score} slop points`);
       setStep(1, blocked.slop_score > 0 ? "done" : "blocked", blocked.slop_score > 0 ? "Blocked before publishing · synthetic phrases highlighted" : "No slop block was triggered");
       setStep(2, "active", "Calling the deterministic de-slop rewrite endpoint");
-      const rewriteResponse = await fetch("/api/v1/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: agentDraft, channel: "linkedin", profileId: "yet-editorial-standard" }) });
+      const rewriteResponse = await fetch("/api/v1/rewrite", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ text: agentDraft, channel: "linkedin", profileId: "yet-editorial-standard" }) });
       const rewrite = await rewriteResponse.json() as { rewritten?: string };
       if (!rewriteResponse.ok || !rewrite.rewritten) throw new Error("Auto-rewrite failed");
       setStep(2, "done", "Removed flagged clichés while preserving the founder point of view");
       setStep(3, "active", "Re-evaluating rewritten copy against the 0.82 pass threshold");
       const cleanedDraft = `${rewrite.rewritten}\n\nWhat did a failed launch teach you? We cut 3 noisy steps, fixed 2 broken handoffs, and wrote 1 lesson for our team. The hard truth: fear made the old process too slow, but the new one is easier to trust.`;
-      const finalResponse = await fetch("/api/v1/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: cleanedDraft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }) });
+      const finalResponse = await fetch("/api/v1/evaluate", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ draft: cleanedDraft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }) });
       const final = await finalResponse.json() as Receipt;
       if (!finalResponse.ok || final.verdict !== "APPROVED" || final.overall_score < 0.82) throw new Error(`Rewritten draft did not clear 0.82 (${final.overall_score ?? "unknown"})`);
       setStep(3, "done", `Approved at ${(final.overall_score * 100).toFixed(1)} / 100 · ${final.receipt_hash.slice(0, 12)}…`);
-      const queueResponse = await fetch("/api/v1/webhooks/deliver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "publishing.approved", destination: "YET Postroom (simulated)", simulate: true, payload: { draft: cleanedDraft, evaluation: final, receipt_hash: final.receipt_hash } }) });
+      const queueResponse = await fetch("/api/v1/webhooks/deliver", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ event: "publishing.approved", destination: "YET Postroom (simulated)", simulate: true, payload: { draft: cleanedDraft, evaluation: final, receipt_hash: final.receipt_hash } }) });
       const queue = await queueResponse.json() as Record<string, unknown>;
       if (!queueResponse.ok) throw new Error("Publishing queue delivery failed");
       setQueueReceipt(queue); setStep(4, "done", `Queued with signed payload · ${String(queue.queue_receipt_hash).slice(0, 12)}…`); setNotice("Simulation complete · approved receipt fired to YET Postroom.");
@@ -213,11 +265,13 @@ function ApiPlayground() {
 
 export default function HomePage() {
   const [tab, setTab] = useState<Tab>("firewall");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickstartOpen, setQuickstartOpen] = useState(false);
   const tabs: { id: Tab; label: string }[] = [
     { id: "firewall", label: "Live Firewall" },
     { id: "memory", label: "Brand Memory" },
     { id: "tournament", label: "Variation Tournament" },
     { id: "api", label: "Agent API" }
   ];
-  return <main className="app-shell"><header className="topbar"><div className="wordmark"><span className="wordmark-mark">B</span><span className="wordmark-name">BrandGate</span><span className="wordmark-kicker">Editorial workbench</span></div><div className="top-actions"><span><span className="status-dot" />All systems local</span><span className="avatar" aria-label="Profile: AO">AO</span></div></header><div className="page-wrap"><section className="hero"><div><p className="eyebrow">YET Editorial Standard / brand workspace</p><h1>Make every word feel like it came from you.</h1></div><p>BrandGate is the calm layer between an agent’s first draft and your public voice.</p></section><nav className="tabs" aria-label="BrandGate workspace"><div role="tablist" style={{ display: "flex" }}>{tabs.map((item, index) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={`tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}><span className="tab-index">0{index + 1}</span>{item.label}</button>)}</div></nav>{tab === "firewall" && <FirewallWorkbench />}{tab === "memory" && <MemoryStudio />}{tab === "tournament" && <Tournament />}{tab === "api" && <ApiPlayground />}<footer className="footer"><span>BrandGate · editorial intelligence for teams who care about the sentence.</span><span><a className="footer-link" href="#status">Status</a> &nbsp;·&nbsp; <a className="footer-link" href="#docs">Docs</a> &nbsp;·&nbsp; <span className="mono">v0.1 local</span></span></footer></div></main>;
+  return <main className="app-shell"><header className="topbar"><div className="wordmark"><span className="wordmark-mark">B</span><span className="wordmark-name">BrandGate</span><span className="wordmark-kicker">Editorial workbench</span></div><div className="top-actions"><span className="system-status"><span className="status-dot" />All systems local</span><div className="header-actions"><button className="header-action" onClick={() => setQuickstartOpen(true)}>📖 Quickstart</button><button className="header-action" onClick={() => setSettingsOpen(true)}>⚙️ Engine &amp; Tokens</button></div><span className="avatar" aria-label="Profile: AO">AO</span></div></header><div className="page-wrap"><section className="hero"><div><p className="eyebrow">YET Editorial Standard / brand workspace</p><h1>Make every word feel like it came from you.</h1></div><p>BrandGate is the calm layer between an agent’s first draft and your public voice.</p></section><nav className="tabs" aria-label="BrandGate workspace"><div role="tablist" style={{ display: "flex" }}>{tabs.map((item, index) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={`tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}><span className="tab-index">0{index + 1}</span>{item.label}</button>)}</div></nav>{tab === "firewall" && <FirewallWorkbench />}{tab === "memory" && <MemoryStudio />}{tab === "tournament" && <Tournament />}{tab === "api" && <ApiPlayground />}<footer className="footer"><span>BrandGate · editorial intelligence for teams who care about the sentence.</span><span><a className="footer-link" href="#status">Status</a> &nbsp;·&nbsp; <a className="footer-link" href="#docs">Docs</a> &nbsp;·&nbsp; <span className="mono">v0.1 local</span></span></footer></div>{settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}{quickstartOpen && <QuickstartModal onClose={() => setQuickstartOpen(false)} />}</main>;
 }

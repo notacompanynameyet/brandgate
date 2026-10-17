@@ -75,9 +75,18 @@ export function getEvaluation(id: string): Evaluation | undefined { return listE
 export interface WebhookRecord { id: string; url: string; events: string[]; createdAt: string; lastDeliveredAt?: string; lastError?: string; }
 export function listWebhooks(): WebhookRecord[] { return readJson<WebhookRecord[]>(files.webhooks, []); }
 export function saveWebhook(input: Pick<WebhookRecord, "url"> & Partial<WebhookRecord>): WebhookRecord { const all = listWebhooks(); const item: WebhookRecord = { id: input.id ?? `wh_${randomUUID()}`, url: input.url, events: input.events ?? ["evaluation.completed"], createdAt: input.createdAt ?? new Date().toISOString() }; all.push(item); writeJson(files.webhooks, all); return item; }
-export async function deliverWebhook(event: string, payload: unknown): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+export async function deliverWebhook(event: string, payload: unknown, overrideUrl?: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
-  for (const webhook of listWebhooks().filter((item) => item.events.includes(event) || item.events.includes("*"))) {
+  const configured = listWebhooks().filter((item) => item.events.includes(event) || item.events.includes("*"));
+  const envWebhookUrl = process.env.POSTROOM_WEBHOOK_URL ?? process.env.WEBHOOK_URL;
+  const webhooks = overrideUrl
+    ? [{ id: "request-override", url: overrideUrl, events: ["*"] }]
+    : configured.length > 0
+      ? configured
+      : envWebhookUrl
+        ? [{ id: "env-default", url: envWebhookUrl, events: ["*"] }]
+        : [];
+  for (const webhook of webhooks) {
     try { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 5000); const response = await fetch(webhook.url, { method: "POST", headers: { "content-type": "application/json", "x-brandgate-event": event }, body: JSON.stringify({ event, payload }), signal: controller.signal }); clearTimeout(timeout); results.push({ id: webhook.id, ok: response.ok }); }
     catch (error) { results.push({ id: webhook.id, ok: false, error: error instanceof Error ? error.message : "delivery failed" }); }
   }

@@ -3,13 +3,14 @@ import { checkRules } from "./rules";
 import { scoreHook } from "./scoring";
 
 export interface JEVResult { provider: "jev" | "local"; score: number; feedback: string[]; }
+export interface JEVOverrides { apiKey?: string; apiUrl?: string; }
 
 /** Optional adapter. Missing keys and network errors always use deterministic local scoring. */
-export async function evaluateWithJEV(text: string, profile?: BrandProfile): Promise<JEVResult> {
-  const key = process.env.JEV_API_KEY;
+export async function evaluateWithJEV(text: string, profile?: BrandProfile, overrides: JEVOverrides = {}): Promise<JEVResult> {
+  const key = overrides.apiKey ?? process.env.JEV_API_KEY;
   if (!key) return localResult(text, profile);
   try {
-    const response = await fetch(process.env.JEV_API_URL ?? "https://api.jev.ai/v1/evaluate", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ context: { draft: text, brand_memory: profile }, questions: [
+    const response = await fetch(overrides.apiUrl ?? process.env.JEV_API_URL ?? "https://api.jev.ai/v1/evaluate", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ context: { draft: text, brand_memory: profile }, questions: [
       { id: "hard_rules", type: "noul", prompt: "Does this draft violate a hard brand rule?" },
       { id: "voice_alignment", type: "choice", options: ["aligned", "mixed", "misaligned"], prompt: "How aligned is the voice?" },
       { id: "hook_strength", type: "score", range: [0, 1], prompt: "How strong is the opening hook?" }

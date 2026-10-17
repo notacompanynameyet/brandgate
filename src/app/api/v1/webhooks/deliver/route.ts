@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const deliveries = await deliverWebhook(event, body.payload);
+    const deliveries = await deliverWebhook(event, body.payload, request.headers.get("x-brandgate-postroom-webhook-url") ?? undefined);
     return NextResponse.json({
       status: deliveries.some((delivery) => delivery.ok) ? "delivered" : "failed",
       transport: "webhook",
