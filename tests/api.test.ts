@@ -5,6 +5,7 @@ import { POST as evaluate } from "@/app/api/v1/evaluate/route";
 import { POST as extract } from "@/app/api/v1/brand/extract/route";
 import { POST as rewrite } from "@/app/api/v1/rewrite/route";
 import { GET as mcpTools, POST as mcpCall } from "@/app/api/mcp/route";
+import { POST as deliverQueue } from "@/app/api/v1/webhooks/deliver/route";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/api", {
@@ -163,4 +164,39 @@ test("MCP brandgate_evaluate_draft accepts canonical agent arguments", async () 
   assert.ok(result.overall_score >= 0 && result.overall_score <= 1);
   assert.match(result.receipt_hash, /^[a-f0-9]{64}$/);
   assert.equal(result.channel_routing.recommended_format, "text post");
+});
+
+test("publishing queue simulator returns a signed queued payload", async () => {
+  const response = await deliverQueue(jsonRequest({
+    event: "publishing.approved",
+    destination: "YET Postroom (simulated)",
+    simulate: true,
+    payload: { draft: "A specific lesson for thoughtful teams.", receipt_hash: "a".repeat(64) }
+  }));
+  const body = await response.json() as { status: string; transport: string; destination: string; queue_receipt_hash: string; payload: { receipt_hash: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "queued");
+  assert.equal(body.transport, "simulated");
+  assert.equal(body.destination, "YET Postroom (simulated)");
+  assert.equal(body.payload.receipt_hash, "a".repeat(64));
+  assert.match(body.queue_receipt_hash, /^[a-f0-9]{64}$/);
+});
+
+test("agent-to-queue path blocks slop, rewrites it, and clears the 0.82 gate", async () => {
+  const draft = "In today's fast-paced world, let's unlock a robust workflow. Let's delve into this game-changer. What did a failed launch teach us? We rebuilt the small workflow that helped a team keep its promise.";
+  const blocked = await evaluate(jsonRequest({ draft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }));
+  const blockedBody = await blocked.json() as { slop_score: number; verdict: string };
+  assert.ok(blockedBody.slop_score > 0);
+  assert.notEqual(blockedBody.verdict, "APPROVED");
+
+  const rewritten = await rewrite(jsonRequest({ text: draft, channel: "linkedin", profileId: "yet-editorial-standard" }));
+  const rewrittenBody = await rewritten.json() as { rewritten: string };
+  const cleanedDraft = `${rewrittenBody.rewritten}\n\nWhat did a failed launch teach you? We cut 3 noisy steps, fixed 2 broken handoffs, and wrote 1 lesson for our team. The hard truth: fear made the old process too slow, but the new one is easier to trust.`;
+  const final = await evaluate(jsonRequest({ draft: cleanedDraft, target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }));
+  const finalBody = await final.json() as { verdict: string; overall_score: number; receipt_hash: string };
+
+  assert.equal(finalBody.verdict, "APPROVED");
+  assert.ok(finalBody.overall_score >= 0.82);
+  assert.match(finalBody.receipt_hash, /^[a-f0-9]{64}$/);
 });

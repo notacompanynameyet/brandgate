@@ -151,6 +151,26 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .method { font-family: "DM Mono", monospace; font-size: 9px; color: var(--forest); min-width: 40px; }
 .webhook-row { padding: 15px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .webhook-row:last-child { border-bottom: 0; }
+.receipt-card .card-body { padding-top: 15px; }
+.receipt-hash { font-size: 11px; overflow-wrap: anywhere; color: var(--forest-dark); margin: 0 0 6px; }
+.receipt-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0 10px; }
+.receipt-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.queue-simulator { margin-top: 26px; border: 1px solid var(--line-dark); background: #fffefa; padding: 18px; }
+.simulator-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.simulator-head h3 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+.simulation-steps { list-style: none; padding: 0; margin: 20px 0 15px; display: grid; gap: 8px; }
+.simulation-step { display: flex; gap: 10px; align-items: flex-start; padding: 10px 11px; border: 1px solid var(--line); background: var(--paper); }
+.simulation-step.active { border-color: var(--amber); background: var(--amber-bg); }
+.simulation-step.done { border-color: #a7c5a4; background: #f0f5ed; }
+.simulation-step.blocked { border-color: #d7aaa5; background: var(--red-bg); }
+.simulation-mark { width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid var(--line-dark); border-radius: 50%; font-family: "DM Mono", monospace; font-size: 11px; flex: 0 0 auto; }
+.simulation-step.done .simulation-mark { color: var(--forest-dark); border-color: var(--forest); }
+.simulation-step.blocked .simulation-mark { color: var(--red); border-color: var(--red); }
+.simulation-step strong, .simulation-step span:last-child { display: block; }
+.simulation-step strong { font-size: 12px; }
+.simulation-step div span:last-child { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.simulation-notice { display: block; line-height: 1.5; }
+.queue-receipt { max-height: 230px; overflow: auto; padding: 13px; margin: 12px 0 0; background: #222d27; color: #dce8dc; font: 11px/1.6 "DM Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .footer { border-top: 1px solid var(--line); margin-top: 38px; padding-top: 16px; color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
 .footer a { color: var(--forest); }
 @media (max-width: 950px) {
@@ -167,4 +187,6 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
   .draft-list, .tournament-grid { grid-template-columns: repeat(2, 1fr); }
   .card-header, .card-body { padding-left: 15px; padding-right: 15px; }
   .footer { display: block; line-height: 1.8; }
+  .simulator-head { display: block; }
+  .simulator-head button { margin-top: 15px; }
 }

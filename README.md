@@ -96,6 +96,7 @@ required fields returns `400` with an `error` field.
 | `GET, PUT /api/v1/brands/:id` | Compatibility alias for profile lookup/update |
 | `POST /api/v1/tournament` | Rank at least two candidate posts by transparent hook score |
 | `GET, POST /api/v1/webhooks` (also `/api/v1/webhook`) | List or register evaluation webhook destinations |
+| `POST /api/v1/webhooks/deliver` | Deliver or simulate an approved signed payload to a publishing queue |
 | `GET, POST /api/mcp` | Inspect or invoke the small MCP-compatible tool surface |
 
 Example evaluation request:
@@ -109,6 +110,11 @@ curl -sS -X POST http://localhost:3000/api/v1/evaluate \
 The MCP endpoint supports `initialize`, `tools/list`, and the agent-facing tools
 `brandgate_get_memory`, `brandgate_extract_dna`, `brandgate_evaluate_draft`, and
 `brandgate_split_threads` (plus compatibility aliases).
+
+The Live Firewall tab can download the latest receipt as JSON or copy a Markdown
+compliance badge. The Agent API tab includes a one-click queue simulator that runs
+the full agent path: blocked slop, deterministic rewrite, 0.82 threshold approval,
+and a signed payload delivered to the simulated YET Postroom destination.
 
 ## Docker
 
