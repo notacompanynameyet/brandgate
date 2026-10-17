@@ -32,6 +32,17 @@ Runtime collections belong under `data/`; credentials belong in environment vari
 - Node.js **20.19.0** (the version in `.nvmrc` and the Docker image)
 - npm 10 or newer
 
+From a clean Linux checkout:
+
+```sh
+git clone https://github.com/notacompanynameyet/brandgate.git
+cd brandgate
+nvm install 20.19.0
+nvm use 20.19.0
+npm ci
+cp .env.example .env.local
+```
+
 Use the pinned runtime locally, then install from the committed lockfile:
 
 ```sh
@@ -133,6 +144,14 @@ npm run build
 
 Use `npm ci` rather than `npm install` in CI and Docker so dependency versions remain
 the versions recorded in `package-lock.json`.
+
+The shortest reproducible verification sequence is:
+
+```sh
+npm ci
+npm test
+npm run build
+```
 
 ## Rebuildability notes
 

@@ -6,3 +6,6 @@ coverage
 .env.*
 !.env.example
 *.log
+data/*.json
+!data/.gitkeep
+!data/README.md
