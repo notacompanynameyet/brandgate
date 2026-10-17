@@ -32,14 +32,22 @@ const initialSimulationSteps: SimulationStep[] = [
 
 function Icon({ name }: { name: "arrow" | "copy" | "check" | "spark" | "book" | "play" }) {
   const paths: Record<string, string> = {
-    arrow: "M5 12h13M13 6l6 6-6 6", copy: "M8 8h11v11H8zM5 16H4V5h11v1", check: "m5 12 4 4L19 6",
-    spark: "m12 3 1.4 6.6L20 12l-6.6 1.4L12 20l-1.4-6.6L4 12l6.6-2.4L12 3", book: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5zM4 5.5v12M8 7h8M8 11h8", play: "m8 5 11 7-11 7z"
+    arrow: "M5 12h13M13 6l6 6-6 6",
+    copy: "M8 8h11v11H8zM5 16H4V5h11v1",
+    check: "m5 12 4 4L19 6",
+    spark: "m12 3 1.4 6.6L20 12l-6.6 1.4L12 20l-1.4-6.6L4 12l6.6-2.4L12 3",
+    book: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5zM4 5.5v12M8 7h8M8 11h8",
+    play: "m8 5 11 7-11 7z"
   };
   return <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name]} /></svg>;
 }
 
 function StatusPill({ children, tone = "good" }: { children: React.ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
+}
+
+function Modal({ title, eyebrow, children, onClose }: { title: string; eyebrow: string; children: React.ReactNode; onClose: () => void }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-topline"><span className="eyebrow">{eyebrow}</span><button className="modal-close" onClick={onClose} aria-label="Close dialog">×</button></div><h2 id="modal-title">{title}</h2>{children}</section></div>;
 }
 
 function highlightSlop(text: string) {
@@ -61,6 +69,10 @@ function markdownBadge(receipt: Receipt) {
   return `> **BrandGate ${receipt.verdict}** · ${Math.round(receipt.overall_score * 100)} / 100 · ${receipt.latency_badge}\n>\n> SHA-256 receipt: \`${receipt.receipt_hash}\`\n>\n> Draft compliance was evaluated at ${receipt.receipt.createdAt}.`;
 }
 
+async function copyText(value: string) {
+  await navigator.clipboard.writeText(value);
+}
+
 function FirewallWorkbench() {
   const [selected, setSelected] = useState(0);
   const [draft, setDraft] = useState(drafts[0].text);
@@ -68,14 +80,22 @@ function FirewallWorkbench() {
   const [evaluating, setEvaluating] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [notice, setNotice] = useState("Run an evaluation to create a signed receipt");
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [badgeCopied, setBadgeCopied] = useState(false);
   const localScore = useMemo(() => Math.max(66, Math.min(96, 91 - Math.round(draft.length / 180) * 2 - (draft.match(/!/g)?.length ?? 0) * 2)), [draft]);
   const score = receipt ? Math.round(receipt.overall_score * 100) : localScore;
-  const selectDraft = (index: number) => { setSelected(index); setDraft(drafts[index].text); setReceipt(null); setNotice("Run an evaluation to create a signed receipt"); };
+
+  const selectDraft = (index: number) => {
+    setSelected(index);
+    setDraft(drafts[index].text);
+    setReceipt(null);
+    setNotice("Run an evaluation to create a signed receipt");
+  };
   const evaluate = async () => {
     setEvaluating(true);
-    const normalizedChannel = channel.toLowerCase() === "linkedin" ? "linkedin" : channel.toLowerCase() === "instagram" ? "instagram" : "generic";
+    const targetChannel = channel.toLowerCase() === "linkedin" ? "linkedin" : channel.toLowerCase() === "instagram" ? "instagram" : "generic";
     try {
-      const response = await fetch("/api/v1/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft, target_channel: normalizedChannel }) });
+      const response = await fetch("/api/v1/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft, target_channel: targetChannel }) });
       const result = await response.json() as Receipt;
       if (!response.ok) throw new Error("Evaluation endpoint returned an error");
       setReceipt(result);
@@ -83,22 +103,23 @@ function FirewallWorkbench() {
     } catch { setNotice("Demo fallback active · evaluation API is unavailable"); }
     setEvaluating(false);
   };
-  const downloadReceipt = () => {
+  const saveReceipt = () => {
     if (!receipt) return;
     downloadFile(`brandgate-receipt-${receipt.receipt_hash.slice(0, 12)}.json`, JSON.stringify(receipt, null, 2), "application/json");
     setNotice("JSON receipt downloaded · hash remains verifiable");
   };
   const copyBadge = async () => {
     if (!receipt) return;
-    try { await navigator.clipboard.writeText(markdownBadge(receipt)); setNotice("Markdown compliance badge copied"); }
+    try { await copyText(markdownBadge(receipt)); setBadgeCopied(true); setNotice("Markdown compliance badge copied"); setTimeout(() => setBadgeCopied(false), 1800); }
     catch { setNotice("Clipboard unavailable · use Download JSON instead"); }
   };
 
   return <>
     <div className="grid">
       <section className="card" aria-labelledby="draft-heading"><div className="card-header"><div><p className="eyebrow">01 / compose</p><h2 id="draft-heading" className="card-title">Live firewall workbench</h2><p className="card-subtitle">Write once. See the brand signal before it ships.</p></div><StatusPill tone={evaluating ? "neutral" : "good"}>{evaluating ? "Evaluating" : "Local preview"}</StatusPill></div><div className="card-body"><div className="draft-list" aria-label="Preset drafts">{drafts.map((item, index) => <button key={item.title} className={`draft-btn ${selected === index ? "selected" : ""}`} onClick={() => selectDraft(index)}><span className="draft-num">0{index + 1}</span><span className="draft-name">{item.title}</span><span className="draft-note">{item.note}</span></button>)}</div><label className="editor-label" htmlFor="draft"><span>Working draft</span><span>{draft.length} chars</span></label><textarea id="draft" className="editor" value={draft} onChange={(event) => { setDraft(event.target.value); setReceipt(null); }} /><div className="toolbar"><div><label className="small-caps" htmlFor="channel">Preview channel&nbsp; </label><select id="channel" className="select" value={channel} onChange={(event) => setChannel(event.target.value)}><option>LinkedIn</option><option>Instagram</option><option>Email</option></select></div><button className="primary-btn" onClick={evaluate} disabled={evaluating}><span style={{ display: "inline-flex", gap: 7, alignItems: "center" }}><Icon name="spark" />{evaluating ? "Checking…" : "Run evaluation"}</span></button></div><span className="small-caps" style={{ display: "block", marginTop: 10 }}>{notice}</span></div></section>
-      <aside className="side-stack"><section className="card" aria-labelledby="score-heading"><div className="score-block"><div id="score-heading" className="score-label">Brand signal score</div><div className="score-number"><strong>{score}</strong><span>/ 100</span></div><div className="meter"><span style={{ width: `${score}%` }} /></div><div className="score-foot"><span>{receipt?.verdict ?? "Local preview"}</span><span>Updated now</span></div></div><ul className="signal-list"><li className="signal"><div><span className="signal-label">Voice &amp; point of view</span><span className="signal-detail">Specific, warm, quietly confident</span></div><StatusPill>92</StatusPill></li><li className="signal"><div><span className="signal-label">Generic language</span><span className="signal-detail">Potential synthetic phrases are highlighted</span></div><StatusPill tone="warn">Review</StatusPill></li></ul></section><section className="card preview" aria-labelledby="preview-heading"><div className="preview-head"><span className="preview-title" id="preview-heading">Channel preview</span><span className="channel"><span className="status-dot" />{channel}</span></div><div className="preview-body">{highlightSlop(draft)}</div><div className="legend"><i /> Highlighted phrases are potential brand slop, not hard blocks.</div></section><section className="card receipt-card" aria-labelledby="receipt-heading"><div className="card-header"><div><p className="eyebrow">Signed evidence</p><h2 id="receipt-heading" className="card-title">Brand Receipt</h2><p className="card-subtitle">Attach compliance proof to a publishing queue or agent trace.</p></div><StatusPill tone={receipt?.verdict === "REJECTED" ? "bad" : receipt?.verdict === "HELD_FOR_REVIEW" ? "warn" : receipt ? "good" : "neutral"}>{receipt?.verdict ?? "Not issued"}</StatusPill></div><div className="card-body"><p className="receipt-hash mono">{receipt?.receipt_hash ?? "No receipt hash yet"}</p><p className="signal-detail">{receipt?.latency_badge ?? notice}</p><div className="receipt-actions"><button className="secondary-btn" onClick={downloadReceipt} disabled={!receipt}><Icon name="arrow" /> Download .json</button><button className="primary-btn" onClick={copyBadge} disabled={!receipt}><Icon name="copy" /> Copy Markdown Badge</button></div><span className="small-caps">{receipt ? "SHA-256 · tamper-evident payload" : "The receipt is created after a live evaluation."}</span></div></section></aside>
+      <aside className="side-stack"><section className="card" aria-labelledby="score-heading"><div className="score-block"><div id="score-heading" className="score-label">Brand signal score</div><div className="score-number"><strong>{score}</strong><span>/ 100</span></div><div className="meter"><span style={{ width: `${score}%` }} /></div><div className="score-foot"><span>{receipt?.verdict ?? "Local preview"}</span><span>Updated now</span></div></div><ul className="signal-list"><li className="signal"><div><span className="signal-label">Voice &amp; point of view</span><span className="signal-detail">Specific, warm, quietly confident</span></div><StatusPill>92</StatusPill></li><li className="signal"><div><span className="signal-label">Generic language</span><span className="signal-detail">Potential synthetic phrases are highlighted</span></div><StatusPill tone="warn">Review</StatusPill></li></ul></section><section className="card preview" aria-labelledby="preview-heading"><div className="preview-head"><span className="preview-title" id="preview-heading">Channel preview</span><span className="channel"><span className="status-dot" />{channel}</span></div><div className="preview-body">{highlightSlop(draft)}</div><div className="legend"><i /> Highlighted phrases are potential brand slop, not hard blocks.</div></section><section className="card receipt-card" aria-labelledby="receipt-heading"><div className="card-header"><div><p className="eyebrow">Signed evidence</p><h2 id="receipt-heading" className="card-title">Brand Receipt</h2><p className="card-subtitle">Attach compliance proof to a publishing queue or agent trace.</p></div><StatusPill tone={receipt?.verdict === "REJECTED" ? "bad" : receipt?.verdict === "HELD_FOR_REVIEW" ? "warn" : receipt ? "good" : "neutral"}>{receipt?.verdict ?? "Not issued"}</StatusPill></div><div className="card-body"><p className="receipt-hash mono">{receipt?.receipt_hash ?? "No receipt hash yet"}</p><p className="signal-detail">{receipt?.latency_badge ?? notice}</p><div className="receipt-actions"><button className="secondary-btn" onClick={() => setReceiptOpen(true)} disabled={!receipt}><Icon name="book" /> View full JSON</button><button className="primary-btn" onClick={copyBadge} disabled={!receipt}><Icon name="copy" /> {badgeCopied ? "Copied badge" : "Copy Markdown Badge"}</button></div><span className="small-caps">{receipt ? "SHA-256 · tamper-evident payload" : "The receipt is created after a live evaluation."}</span></div></section></aside>
     </div><div className="grid" style={{ marginTop: 20 }}><section className="card"><div className="card-header"><div><p className="eyebrow">Signal map</p><h2 className="card-title">What the firewall is watching</h2></div><button className="secondary-btn">View rubric <Icon name="arrow" /></button></div><div className="metric-row"><div className="metric"><div className="metric-number">38</div><div className="metric-label">decisions evaluated</div></div><div className="metric"><div className="metric-number">0.82</div><div className="metric-label">minimum pass score</div></div><div className="metric"><div className="metric-number">SHA</div><div className="metric-label">signed receipt</div></div></div></section></div>
+    {receipt && receiptOpen && <Modal eyebrow="Signed evidence" title="Full Signed JSON Receipt" onClose={() => setReceiptOpen(false)}><pre className="modal-code">{JSON.stringify(receipt, null, 2)}</pre><div className="modal-actions"><button className="secondary-btn" onClick={saveReceipt}>Download JSON</button><button className="primary-btn" onClick={copyBadge}>{badgeCopied ? "Copied" : "Copy Markdown Badge"}</button></div></Modal>}
   </>;
 }
 
@@ -135,11 +156,13 @@ function Tournament() {
 
 function QueueSimulator() {
   const [simulating, setSimulating] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [steps, setSteps] = useState(initialSimulationSteps);
   const [notice, setNotice] = useState("Ready to run the complete agent-to-queue path.");
   const [queueReceipt, setQueueReceipt] = useState<Record<string, unknown> | null>(null);
   const setStep = (index: number, status: SimulationStep["status"], detail: string) => setSteps((current) => current.map((step, stepIndex) => stepIndex === index ? { ...step, status, detail } : step));
-  const simulate = async () => {
+  const runSimulation = async () => {
+    setShowConfirm(false);
     setSimulating(true); setQueueReceipt(null); setSteps(initialSimulationSteps); setNotice("Autonomous agent simulation running…");
     const agentDraft = "In today's fast-paced world, let's unlock a robust workflow. Let's delve into this game-changer. What did a failed launch teach us? We rebuilt the small workflow that helped a team keep its promise.";
     try {
@@ -169,17 +192,32 @@ function QueueSimulator() {
       setNotice(message); setSteps((current) => current.map((step) => step.status === "active" ? { ...step, status: "blocked", detail: message } : step));
     } finally { setSimulating(false); }
   };
-  return <div className="queue-simulator" aria-live="polite"><div className="simulator-head"><div><p className="eyebrow">Autonomous publishing path</p><h3>Live Webhook &amp; YET Postroom Queue Simulator</h3><p className="card-subtitle">Watch an agent get blocked, rewrite, pass the 0.82 gate, and fire its signed payload.</p></div><button className="primary-btn" onClick={simulate} disabled={simulating}><Icon name="play" /> {simulating ? "Running path…" : "Simulate agent → queue"}</button></div><ol className="simulation-steps">{steps.map((step) => <li className={`simulation-step ${step.status}`} key={step.label}><span className="simulation-mark">{step.status === "done" ? "✓" : step.status === "blocked" ? "!" : step.status === "active" ? "·" : "○"}</span><div><strong>{step.label}</strong><span>{step.detail}</span></div></li>)}</ol><p className="small-caps simulation-notice">{notice}</p>{queueReceipt && <pre className="queue-receipt">{JSON.stringify(queueReceipt, null, 2)}</pre>}</div>;
+  return <><div className="queue-simulator" aria-live="polite"><div className="simulator-head"><div><p className="eyebrow">Autonomous publishing path</p><h3>Live Webhook &amp; YET Postroom Queue Simulator</h3><p className="card-subtitle">Watch an agent get blocked, rewrite, pass the 0.82 gate, and fire its signed payload.</p></div><button className="primary-btn" onClick={() => setShowConfirm(true)} disabled={simulating}><Icon name="play" /> {simulating ? "Running path…" : "Simulate agent → queue"}</button></div><ol className="simulation-steps">{steps.map((step) => <li className={`simulation-step ${step.status}`} key={step.label}><span className="simulation-mark">{step.status === "done" ? "✓" : step.status === "blocked" ? "!" : step.status === "active" ? "·" : "○"}</span><div><strong>{step.label}</strong><span>{step.detail}</span></div></li>)}</ol><p className="small-caps simulation-notice">{notice}</p>{queueReceipt && <pre className="queue-receipt">{JSON.stringify(queueReceipt, null, 2)}</pre>}</div>{showConfirm && <Modal eyebrow="Outbound simulation" title="Simulate Webhook Delivery to YET Postroom" onClose={() => setShowConfirm(false)}><p className="modal-copy">BrandGate will submit the preset agent draft, block its slop, rewrite it, verify the 0.82 threshold, and queue a signed payload. No external network delivery is made.</p><div className="modal-route"><span>Destination</span><strong>YET Postroom · simulated</strong></div><div className="modal-actions"><button className="secondary-btn" onClick={() => setShowConfirm(false)}>Cancel</button><button className="primary-btn" onClick={runSimulation}><Icon name="play" /> Start simulation</button></div></Modal>}</>;
 }
 
 function ApiPlayground() {
   const [endpoint, setEndpoint] = useState("Evaluate draft");
-  const endpointInfo = endpoint === "Evaluate draft" ? { method: "POST", path: "/api/v1/evaluate", code: `curl -X POST http://localhost:3000/api/v1/evaluate \\\n+  -H 'Content-Type: application/json' \\\n+  -d '{"draft":"A new way to think.","target_channel":"linkedin","brand_profile_id":"yet-editorial-standard"}'` } : { method: "GET", path: "/api/mcp", code: `curl http://localhost:3000/api/mcp` };
-  return <section className="card"><div className="card-header"><div><p className="eyebrow">04 / connect</p><h2 className="card-title">Agent MCP &amp; REST API playground</h2><p className="card-subtitle">See what your agent can call, inspect the request, and take it with you.</p></div><StatusPill tone="neutral">Sandbox</StatusPill></div><div className="card-body"><div className="api-layout"><div className="endpoint-list" role="list" aria-label="API endpoints"><button className={`endpoint ${endpoint === "Evaluate draft" ? "active" : ""}`} onClick={() => setEndpoint("Evaluate draft")}><span className="method">POST</span><span>Evaluate draft</span></button><button className={`endpoint ${endpoint === "Read memory" ? "active" : ""}`} onClick={() => setEndpoint("Read memory")}><span className="method">GET</span><span>Read brand memory</span></button><button className="endpoint" onClick={() => setEndpoint("Evaluate draft")}><span className="method">MCP</span><span>brandgate.evaluate</span></button></div><div><div className="small-caps" style={{ marginBottom: 8 }}>{endpointInfo.method} {endpointInfo.path}</div><div className="code-window" aria-label="Curl example"><span className="code-command">{endpointInfo.code}</span></div><div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="primary-btn"><Icon name="play" /> Try request</button><button className="secondary-btn"><Icon name="copy" /> Copy curl</button></div></div></div><div style={{ marginTop: 26, borderTop: "1px solid var(--line)", paddingTop: 19 }}><p className="eyebrow">Webhook inspector</p><div className="webhook-row"><div><strong style={{ fontSize: 12 }}>evaluation.completed</strong><span className="signal-detail">https://your-app.com/hooks/brandgate</span></div><StatusPill>200 OK</StatusPill></div><div className="webhook-row"><div><strong style={{ fontSize: 12 }}>publishing.approved</strong><span className="signal-detail">YET Postroom simulator · signed payload</span></div><StatusPill tone="warn">Ready</StatusPill></div></div><QueueSimulator /></div></section>;
+  const [configOpen, setConfigOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const endpointInfo = endpoint === "Evaluate draft"
+    ? { method: "POST", path: "/api/v1/evaluate", code: `curl -X POST http://localhost:3000/api/v1/evaluate \\\n  -H 'Content-Type: application/json' \\\n  -d '{"draft":"A new way to think.","target_channel":"linkedin","brand_profile_id":"yet-editorial-standard"}'` }
+    : { method: "GET", path: "/api/mcp", code: "curl http://localhost:3000/api/mcp" };
+  const curl = `curl -X POST http://localhost:3000/api/v1/evaluate \\\n  -H 'Content-Type: application/json' \\\n  -d '{"draft":"A specific lesson for thoughtful teams.","target_channel":"linkedin","brand_profile_id":"yet-editorial-standard"}'`;
+  const mcp = JSON.stringify({ mcpServers: { brandgate: { url: "http://localhost:3000/api/mcp" } } }, null, 2);
+  const copyConfig = async (label: string, value?: string) => {
+    try { await copyText(value ?? (label === "REST copied" ? curl : mcp)); setCopied(label); setTimeout(() => setCopied(null), 1800); }
+    catch { setCopied("Clipboard unavailable"); }
+  };
+  return <section className="card"><div className="card-header"><div><p className="eyebrow">04 / connect</p><h2 className="card-title">Agent MCP &amp; REST API playground</h2><p className="card-subtitle">See what your agent can call, inspect the request, and take it with you.</p></div><StatusPill tone="neutral">Sandbox</StatusPill></div><div className="card-body"><div className="api-layout"><div className="endpoint-list" role="list" aria-label="API endpoints"><button className={`endpoint ${endpoint === "Evaluate draft" ? "active" : ""}`} onClick={() => setEndpoint("Evaluate draft")}><span className="method">POST</span><span>Evaluate draft</span></button><button className={`endpoint ${endpoint === "Read memory" ? "active" : ""}`} onClick={() => setEndpoint("Read memory")}><span className="method">GET</span><span>Read brand memory</span></button><button className="endpoint" onClick={() => setEndpoint("Evaluate draft")}><span className="method">MCP</span><span>brandgate.evaluate</span></button></div><div><div className="small-caps" style={{ marginBottom: 8 }}>{endpointInfo.method} {endpointInfo.path}</div><div className="code-window" aria-label="Curl example"><span className="code-command">{endpointInfo.code}</span></div><div className="api-actions"><button className="primary-btn" onClick={() => setConfigOpen(true)}><Icon name="copy" /> Copy cURL / MCP Config</button><button className="secondary-btn" onClick={() => setConfigOpen(true)}><Icon name="arrow" /> Open docs</button></div></div></div><div className="webhook-inspector"><p className="eyebrow">Webhook inspector</p><div className="webhook-row"><div><strong>evaluation.completed</strong><span className="signal-detail">Signed receipt event · local delivery</span></div><StatusPill>200 OK</StatusPill></div><div className="webhook-row"><div><strong>publishing.approved</strong><span className="signal-detail">YET Postroom simulator · signed payload</span></div><StatusPill tone="warn">Ready</StatusPill></div></div><QueueSimulator /></div>{configOpen && <Modal eyebrow="Agent handoff" title="Copy cURL / MCP Config" onClose={() => setConfigOpen(false)}><p className="modal-copy">Take these ready-to-run connection snippets into Claude, OpenClaw, Hermes, or a REST client.</p><div className="config-block"><div className="config-label"><span>REST evaluation</span><button className="copy-chip" onClick={() => copyConfig("REST copied")}>{copied === "REST copied" ? "Copied" : "Copy cURL"}</button></div><pre className="modal-code">{curl}</pre></div><div className="config-block"><div className="config-label"><span>MCP server config</span><button className="copy-chip" onClick={() => copyConfig("MCP copied")}>{copied === "MCP copied" ? "Copied" : "Copy JSON"}</button></div><pre className="modal-code">{mcp}</pre></div><span className="copy-feedback">{copied ?? "One click copies the complete snippet."}</span></Modal>}</section>;
 }
 
 export default function HomePage() {
   const [tab, setTab] = useState<Tab>("firewall");
-  const tabs: { id: Tab; label: string }[] = [{ id: "firewall", label: "Live Firewall" }, { id: "memory", label: "Brand Memory" }, { id: "tournament", label: "Variation Tournament" }, { id: "api", label: "Agent API" }];
-  return <main className="app-shell"><header className="topbar"><div className="wordmark"><span className="wordmark-mark">B</span><span className="wordmark-name">BrandGate</span><span className="wordmark-kicker">Editorial workbench</span></div><div className="top-actions"><span><span className="status-dot" />All systems local</span><span className="avatar" aria-label="Profile: AO">AO</span></div></header><div className="page-wrap"><section className="hero"><div><p className="eyebrow">YET Editorial Standard / brand workspace</p><h1>Make every word feel like it came from you.</h1></div><p>BrandGate is the calm layer between an agent’s first draft and your public voice.</p></section><nav className="tabs" aria-label="BrandGate workspace"><div role="tablist" style={{ display: "flex" }}>{tabs.map((item, index) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={`tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}><span className="tab-index">0{index + 1}</span>{item.label}</button>)}</div></nav>{tab === "firewall" && <FirewallWorkbench />}{tab === "memory" && <MemoryStudio />}{tab === "tournament" && <Tournament />}{tab === "api" && <ApiPlayground />}<footer className="footer"><span>BrandGate · editorial intelligence for teams who care about the sentence.</span><span><a href="#status">Status</a> &nbsp;·&nbsp; <a href="#docs">Docs</a> &nbsp;·&nbsp; <span className="mono">v0.1 local</span></span></footer></div></main>;
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "firewall", label: "Live Firewall" },
+    { id: "memory", label: "Brand Memory" },
+    { id: "tournament", label: "Variation Tournament" },
+    { id: "api", label: "Agent API" }
+  ];
+  return <main className="app-shell"><header className="topbar"><div className="wordmark"><span className="wordmark-mark">B</span><span className="wordmark-name">BrandGate</span><span className="wordmark-kicker">Editorial workbench</span></div><div className="top-actions"><span><span className="status-dot" />All systems local</span><span className="avatar" aria-label="Profile: AO">AO</span></div></header><div className="page-wrap"><section className="hero"><div><p className="eyebrow">YET Editorial Standard / brand workspace</p><h1>Make every word feel like it came from you.</h1></div><p>BrandGate is the calm layer between an agent’s first draft and your public voice.</p></section><nav className="tabs" aria-label="BrandGate workspace"><div role="tablist" style={{ display: "flex" }}>{tabs.map((item, index) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={`tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}><span className="tab-index">0{index + 1}</span>{item.label}</button>)}</div></nav>{tab === "firewall" && <FirewallWorkbench />}{tab === "memory" && <MemoryStudio />}{tab === "tournament" && <Tournament />}{tab === "api" && <ApiPlayground />}<footer className="footer"><span>BrandGate · editorial intelligence for teams who care about the sentence.</span><span><a className="footer-link" href="#status">Status</a> &nbsp;·&nbsp; <a className="footer-link" href="#docs">Docs</a> &nbsp;·&nbsp; <span className="mono">v0.1 local</span></span></footer></div></main>;
 }
