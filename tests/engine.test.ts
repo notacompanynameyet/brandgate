@@ -45,6 +45,41 @@ test("extractDNA summarizes valid samples and rejects too-small inputs", () => {
   assert.throws(() => extractDNA(posts.slice(0, 2)), /requires between 3 and 10 posts/);
 });
 
+test("extractDNA keeps short posts finite and preserves the three-sample boundary", () => {
+  const dna = extractDNA(["Hi.", "Go.", "Now."]);
+
+  assert.equal(dna.sampleCount, 3);
+  assert.equal(dna.sentenceLength.average, 1);
+  assert.deepEqual(dna.sentenceLength.range, [1, 1]);
+  assert.ok(Number.isFinite(dna.sentenceLength.average));
+});
+
+test("extractDNA accepts mixed Latin and Hinglish posts without losing useful vocabulary", () => {
+  const dna = extractDNA([
+    "Aaj ka startup lesson: keep the system simple.",
+    "Yeh workflow teams ko clarity deta hai.",
+    "Small steps, bada impact, and a calmer day."
+  ]);
+
+  assert.equal(dna.sampleCount, 3);
+  assert.ok(dna.vocabulary.includes("startup"));
+  assert.ok(dna.punctuation[":"] >= 1);
+  assert.ok(dna.voice.length >= 2);
+});
+
+test("extractDNA handles emoji-heavy posts while measuring punctuation and text separately", () => {
+  const dna = extractDNA([
+    "Build slowly 🌱✨ and make room to think.",
+    "Small steps 🚀 small systems 💡.",
+    "Keep it human ❤️ — the work will follow."
+  ]);
+
+  assert.equal(dna.sampleCount, 3);
+  assert.ok(dna.vocabulary.includes("small"));
+  assert.equal(dna.punctuation["—"], 1);
+  assert.ok(!dna.vocabulary.some((word) => /[🌱✨🚀💡❤️]/u.test(word)));
+});
+
 test("routeContent preserves generic content and splits long Threads content", () => {
   assert.deepEqual(routeContent("A short post", "generic"), [
     { channel: "generic", text: "A short post", index: 0 }

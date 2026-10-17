@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { POST as evaluate } from "@/app/api/v1/evaluate/route";
 import { POST as extract } from "@/app/api/v1/brand/extract/route";
@@ -105,4 +106,61 @@ test("MCP exposes the four agent-facing BrandGate tools", async () => {
   assert.equal(response.status, 200);
   assert.ok(["APPROVED", "HELD_FOR_REVIEW", "REJECTED"].includes(body.result.structuredContent.verdict));
   assert.match(body.result.structuredContent.receipt_hash, /^[a-f0-9]{64}$/);
+});
+
+test("evaluate API receipt_hash verifies against the canonical SHA-256 payload", async () => {
+  process.env.JEV_API_KEY = "";
+  const text = "A concrete lesson for careful teams.";
+  const channel = "linkedin";
+  const response = await evaluate(jsonRequest({ draft: text, target_channel: channel }));
+  const body = await response.json() as {
+    receipt_hash: string;
+    receipt: { createdAt: string; profileId?: string; latency_badge?: string; decisions_evaluated?: number };
+  };
+  const canonical = JSON.stringify({
+    text,
+    channel,
+    profileId: body.receipt.profileId ?? null,
+    createdAt: body.receipt.createdAt,
+    latency_badge: body.receipt.latency_badge,
+    decisions_evaluated: body.receipt.decisions_evaluated
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(body.receipt_hash, createHash("sha256").update(canonical).digest("hex"));
+});
+
+test("MCP brandgate_split_threads returns numbered posts for long drafts", async () => {
+  const draft = Array.from({ length: 18 }, (_, index) => `A useful thread sentence ${index + 1} explains the decision.`).join(" ");
+  const response = await mcpCall(jsonRequest({
+    id: 2,
+    method: "tools/call",
+    params: { name: "brandgate_split_threads", arguments: { draft } }
+  }));
+  const body = await response.json() as { result: { structuredContent: { posts: string[] } } };
+  const posts = body.result.structuredContent.posts;
+
+  assert.equal(response.status, 200);
+  assert.ok(posts.length > 1);
+  assert.match(posts[0], /1\//);
+  assert.match(posts.at(-1) ?? "", new RegExp(`${posts.length}/${posts.length}`));
+});
+
+test("MCP brandgate_evaluate_draft accepts canonical agent arguments", async () => {
+  const response = await mcpCall(jsonRequest({
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "brandgate_evaluate_draft",
+      arguments: { draft: "A specific lesson for thoughtful teams.", target_channel: "linkedin", brand_profile_id: "yet-editorial-standard" }
+    }
+  }));
+  const body = await response.json() as { result: { structuredContent: { verdict: string; overall_score: number; receipt_hash: string; channel_routing: { recommended_format: string } } } };
+  const result = body.result.structuredContent;
+
+  assert.equal(response.status, 200);
+  assert.ok(["APPROVED", "HELD_FOR_REVIEW", "REJECTED"].includes(result.verdict));
+  assert.ok(result.overall_score >= 0 && result.overall_score <= 1);
+  assert.match(result.receipt_hash, /^[a-f0-9]{64}$/);
+  assert.equal(result.channel_routing.recommended_format, "text post");
 });
