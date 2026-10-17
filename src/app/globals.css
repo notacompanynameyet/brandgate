@@ -140,6 +140,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .dna-section p { color: var(--muted); font-size: 12px; margin: 0; }
 .tournament-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .variant-card { border: 1px solid var(--line); border-radius: 8px; background: #fffefa; overflow: hidden; }
+.variant-card.winner { border-color: var(--forest); box-shadow: 0 0 0 2px rgba(49, 92, 73, .12), 0 12px 28px rgba(49, 92, 73, .1); }
 .variant-head { padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
 .variant-card textarea { width: 100%; min-height: 170px; border: 0; resize: vertical; padding: 14px; background: transparent; color: var(--ink); line-height: 1.55; font-size: 13px; }
 .variant-footer { padding: 12px 14px; border-top: 1px solid var(--line); }
@@ -147,6 +148,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .bar-line b { color: var(--ink); font-family: "DM Mono", monospace; }
 .thin-meter { height: 4px; background: var(--paper-deep); }
 .thin-meter span { height: 100%; display: block; background: var(--forest); }
+.tournament-diagnostics { display: grid; gap: 5px; margin-top: 10px; color: var(--muted); font: 10px/1.4 "DM Mono", monospace; }
+.tournament-diagnostics span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .code-window { border-radius: 8px; background: #222d27; color: #dce8dc; padding: 17px; font-family: "DM Mono", monospace; font-size: 11px; line-height: 1.75; overflow-x: auto; white-space: pre; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 .code-key { color: #c7a66e; }.code-string { color: #b4d39d; }.code-command { color: #d3d7c9; }
 .api-layout { display: grid; grid-template-columns: .65fr 1.35fr; gap: 20px; }

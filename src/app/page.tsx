@@ -192,18 +192,20 @@ function MemoryStudio() {
 
 function Tournament() {
   const [variants, setVariants] = useState(drafts.slice(0, 3).map((draft) => draft.text));
-  const [scores, setScores] = useState<number[]>([92, 84, 77]);
+  type TournamentResult = { index: number; score: number; verdict: string; slop_penalty_count: number; key_reason: string };
+  const [results, setResults] = useState<TournamentResult[]>([]);
   const [running, setRunning] = useState(false);
   const update = (index: number, value: string) => setVariants((items) => items.map((item, i) => i === index ? value : item));
   const runTournament = async () => {
     setRunning(true);
     try {
       const response = await fetch("/api/v1/tournament", { method: "POST", headers: runtimeHeaders(), body: JSON.stringify({ candidates: variants }) });
-      const body = await response.json() as { ranking?: Array<{ index: number; score: { total: number } }> };
-      if (response.ok && body.ranking) setScores(body.ranking.reduce((next, item) => { next[item.index] = Math.round(item.score.total / 40 * 100); return next; }, [0, 0, 0]));
+      const body = await response.json() as { ranking?: TournamentResult[] };
+      if (response.ok && body.ranking) setResults(body.ranking);
     } finally { setRunning(false); }
   };
-  return <section className="card"><div className="card-header"><div><p className="eyebrow">03 / compare</p><h2 className="card-title">Variation tournament</h2><p className="card-subtitle">Put up to three directions in the ring. Choose the one with the clearest signal.</p></div><button className="primary-btn" onClick={runTournament} disabled={running}><Icon name="play" /> {running ? "Scoring…" : "Run tournament"}</button></div><div className="card-body"><div className="tournament-grid">{variants.map((variant, index) => <article className="variant-card" key={index}><div className="variant-head"><span className="small-caps">Draft 0{index + 1}</span>{index === scores.indexOf(Math.max(...scores)) ? <StatusPill>Leader</StatusPill> : <span className="mono" style={{ color: "var(--muted)", fontSize: 10 }}>#{index + 1}</span>}</div><textarea aria-label={`Tournament draft ${index + 1}`} value={variant} onChange={(event) => update(index, event.target.value)} /><div className="variant-footer"><div className="bar-line"><span>Brand signal</span><b>{scores[index]}</b></div><div className="thin-meter"><span style={{ width: `${scores[index]}%` }} /></div></div></article>)}</div><p className="card-subtitle" style={{ marginTop: 18 }}><Icon name="check" /> Scores use the current deterministic hook and brand firewall rubric.</p></div></section>;
+  const winnerIndex = results[0]?.index;
+  return <section className="card"><div className="card-header"><div><p className="eyebrow">03 / compare</p><h2 className="card-title">Variation tournament</h2><p className="card-subtitle">Each draft runs through the full BrandGate engine. The winner is not position-biased.</p></div><button className="primary-btn" onClick={runTournament} disabled={running}><Icon name="play" /> {running ? "Scoring…" : "Run tournament"}</button></div><div className="card-body"><div className="tournament-grid">{variants.map((variant, index) => { const result = results.find((item) => item.index === index); const isWinner = winnerIndex === index; return <article className={`variant-card ${isWinner ? "winner" : ""}`} key={index}><div className="variant-head"><span className="small-caps">Draft 0{index + 1}</span>{isWinner ? <StatusPill>Leader</StatusPill> : result ? <StatusPill tone={result.verdict === "APPROVED" ? "good" : "bad"}>{result.verdict}</StatusPill> : <span className="mono" style={{ color: "var(--muted)", fontSize: 10 }}>Awaiting score</span>}</div><textarea aria-label={`Tournament draft ${index + 1}`} value={variant} onChange={(event) => { update(index, event.target.value); setResults([]); }} /><div className="variant-footer">{result ? <><div className="bar-line"><span>Brand signal</span><b>{result.score}</b></div><div className="thin-meter"><span style={{ width: `${result.score}%` }} /></div><div className="tournament-diagnostics"><span>{result.slop_penalty_count} slop {result.slop_penalty_count === 1 ? "penalty" : "penalties"}</span><span title={result.key_reason}>{result.key_reason}</span></div></> : <div className="bar-line"><span>Run tournament for full score</span><b>—</b></div>}</div></article>; })}</div><p className="card-subtitle" style={{ marginTop: 18 }}><Icon name="check" /> Scores combine rule safety, slop penalties, hook strength, and concrete specificity.</p></div></section>;
 }
 
 function QueueSimulator() {

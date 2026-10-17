@@ -9,3 +9,4 @@ export * from "./receipt";
 export * from "./hard_rules";
 export * from "./banned_words";
 export * from "./manufactured_claims";
+export * from "./evaluateDraft";

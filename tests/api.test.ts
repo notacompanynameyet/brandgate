@@ -6,6 +6,7 @@ import { POST as extract } from "@/app/api/v1/brand/extract/route";
 import { POST as rewrite } from "@/app/api/v1/rewrite/route";
 import { GET as mcpTools, POST as mcpCall } from "@/app/api/mcp/route";
 import { POST as deliverQueue } from "@/app/api/v1/webhooks/deliver/route";
+import { POST as tournament } from "@/app/api/v1/tournament/route";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/api", {
@@ -199,4 +200,24 @@ test("agent-to-queue path blocks slop, rewrites it, and clears the 0.82 gate", a
   assert.equal(finalBody.verdict, "APPROVED");
   assert.ok(finalBody.overall_score >= 0.82);
   assert.match(finalBody.receipt_hash, /^[a-f0-9]{64}$/);
+});
+
+test("coffee tournament runs the full firewall and lets the clean human draft win", async () => {
+  const drafts = [
+    "In today's fast-paced mornings, let's delve into how our revolutionary new pour-over bags unlock the ultimate coffee experience anywhere you go!",
+    "Throw away your espresso machine right now! Our new pocket brew bags guarantee 500% better taste in 10 seconds flat. Comment \"BREW\" below!",
+    "Hotel room coffee is almost always stale. We spent four months sealing 18 grams of fresh-ground estate coffee into nitrogen-flushed filter bags so you only need a kettle when you travel."
+  ];
+  const response = await tournament(jsonRequest({ candidates: drafts }));
+  const body = await response.json() as { winner: { index: number; score: number }; ranking: Array<{ index: number; score: number; verdict: string; slop_penalty_count: number }> };
+  const byIndex = new Map(body.ranking.map((item) => [item.index, item]));
+
+  assert.equal(response.status, 200);
+  assert.equal(body.winner.index, 2);
+  assert.ok(body.winner.score > 82);
+  assert.ok((byIndex.get(0)?.score ?? 100) < 50);
+  assert.ok((byIndex.get(1)?.score ?? 100) < 50);
+  assert.equal(byIndex.get(2)?.verdict, "APPROVED");
+  assert.ok((byIndex.get(0)?.slop_penalty_count ?? 0) >= 4);
+  assert.ok((byIndex.get(1)?.slop_penalty_count ?? 0) < 2);
 });
